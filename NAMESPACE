@@ -1,0 +1,12 @@
+import(GenomicRanges)
+import(methylKit)
+import(genomation)
+import(rtracklayer)
+import(BSgenome)
+import(STRINGdb)
+import(igraph)
+
+#import(motifcounter)
+
+#importFrom("parallel", "mclapply")
+#importFrom("methods", "is")

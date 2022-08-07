@@ -1,0 +1,373 @@
+---
+title: "motifActivity: reconstruct transcription factor networks from high-throughput data and sequence information"
+date: "`r Sys.Date()`"
+package: "motifActivity"
+output: 
+      html_document:
+        toc: true
+        toc_float: true
+        number_sections: true
+        toc_depth: 2
+
+bibliography: Vignette_motifActivity.bib
+vignette: >
+  %\VignetteIndexEntry{motifActivity}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(dpi = 75)
+knitr::opts_chunk$set(cache = FALSE)
+```
+
+```{r ,eval=TRUE,echo=FALSE,warning=FALSE,message=FALSE}
+#devtools::load_all(".")
+```
+
+```{r setup2, include=FALSE, cache=FALSE, eval=TRUE}
+library(knitr)
+opts_chunk$set(root.dir=getwd(),fig.align='center',
+               fig.path='Figures', 
+               dev='png',
+               fig.show='hold', 
+               cache=FALSE)
+library(GenomicRanges)
+set.seed=10
+```
+
+```{r}
+#source("/home/kwreczy/projects/motifActivity/R/SignalMatrix.R")
+#source("/home/kwreczy/projects/motifActivity/R/Model.R")
+#source("/home/kwreczy/projects/motifActivity/R/Visualise.R")
+#source("/home/kwreczy/projects/motifActivity/R/CorrelateMotifswithGenes.R")
+#source("/home/kwreczy/projects/motifActivity/R/MotifHitsMatrix.R")
+
+#> checking examples ... ERROR
+##  Running examples in ‘motifActivity-Ex.R’ failed
+#  The error most likely occurred in:
+##  
+#  > base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+#  > ### Name: filterSignalMatrix
+#  > ### Title: # Get a score in each window
+#  > ### Aliases: filterSignalMatrix
+#  > sig.mtx=getSignalMatrix(
+#  +              Rsamtools::TabixFile(methylbase.objDB@dbpath),
+#  +             windows,
+#  +             methylbase.objDB@sample.ids,
+#  +             methylbase.objDB@assembly,
+#  +             methylbase.objDB@treatment)
+#  Error in getSignalMatrix(Rsamtools::TabixFile(methylbase.objDB@dbpath),  : 
+#    could not find function "getSignalMatrix"
+#  Execution halted
+```
+
+# Introduction
+
+In this manual, I will show how to use the `motifActivity` package. `motifActivity` is an 
+R package for a reconstruction of transcription factor networks by using DNA motif activity estimated from high-throughput sequencing data and sequence information. The package is designed to deal with sequencing data from Bisulfite-seq, ATAC-seq, ChIP-seq, RNA-seq and its variants. 
+
+## Computational integration of epigenetic data with other types for genomic data
+
+Transcription factors (TFs) bind to specific, relatively short DNA sequences called DNA sequence motifs. The binding sites of TFs can be determined genome-wide using chromatin immunoprecipitation with specific antibodies followed by high-throughput sequencing (ChIP-seq). Although ChIP-seq studies suggest that many TF binding events appear to be not functional or are associated with secondary DNA structures [@Wreczycka2019-zr], the presence of a sequence motif is predictive of the binding events and gene expression [@Lambert2018].
+
+A powerful system-level integrative approach is to exploit association of epigentic signals at regulatory regions with transcription factor binding to infer patterns of regulatory activity. This association is usually not straigh-forward, such as in case of DNA methylation. Although DNA methylation at regulatory sites has been traditionally viewed as dictating transcription factor affinity, the opposite has also been observed [@Stadler2011-wm]. Moreover, there are classes of TFs (for example POU and NFAT families) that prefer binding to methylated sequences [@Yin2017]. Here, in this manual, I will describe methods for association of DNA methylation with transcription factor binding patterns, but it can be extended to any other epigenetic or genetic signal.
+
+First generation of methods to predict transcription factors involved in particular transcriptional response utilize Position Probability Matrices (PWMs) of TFs motifs to predict binding sites in enhancers in the vicinity of regulated genes [@Dhaeseleer2006]. These methods range from simple PWM matching [@Kel2003-kc;@Tan2016-nl;@Grant2011-hs;@Gama-Castro2016-zi;@Heinz2010-gp] to modeling-based approaches [@Zhong2013-gt; @Jankowski2016-tw]. Another approach is transcription factor enrichment analysis (TFEA)(Rubin et al. 2020) that draws inspiration from Gene Set Enrichment Analysis (GSEA)[@Subramanian2005], and detects positional motif enrichment within a list of ranked regions of interest, such as enhancers. Still, the identification of key transcription factors in regulatory networks by only motif enrichment methods is generally associated with a high false-positive rate with too many candidate factors to investigate.
+
+It gave rise to novel system epigenomics methods for inferring TF binding activity. Some
+of them exploit inverse correlation between DNA methylation and regulatory element activity to infer disrupted regulatory networks associated with a disease risk [@Teschendorff2015;@Yuan2015]. For example, enhancer linking by methylation and expression relationships
+(ELMER) algorithm first identifies enhancers, whose DNA methylation levels are altered in
+cancer. Then, it uses the matched mRNA expression of putative gene targets to construct
+cancer-specific enhancer-gene networks [@Silva2018]. ELMER uses TF-binding motif
+enrichment analysis for correlated enhancers and mRNA expression of enriched TFs to identify
+cancer-specific activated TFs. Other similar approaches include tracing enhancer networks
+using epigenetic traits (TENET) [@Rhie2016] and RegNetDriver [@RegNetDriver]. TENET refines ELMER’s method by identifying tissue-specific enhancer-gene links, and RegNetDriver constructs tissue regulatory networks by integrating cell-type-specific open chromatin data from publicly available databases such as ENCODE [@encode2012] and RMEC [@Kundaje2015]. Mapping disease-associated molecular alterations in that tissue onto the corresponding tissue-specific network can reveal which TFs are deregulated in disease. ELMER identified RUNX1 as a key TF determining clinical outcome in kidney cancer [@Rhie2016], and RegNetDriver revealed that most of the functional alterations of TFs in prostate cancer were associated with DNA methylation changes but that TF hubs were preferentially altered at the copy-number level [@RegNetDriver]. By integrating a gene function network such as a protein-protein interaction (PPI) network, the functional epigenetic module (FEM) tool can identify differentially expressed gene modules [@Jiao2014]. A SMITE algorithm extends that approach by calculating significance based modules, based on transcriptome and epigenome [@Wijetunga2017]. Although these tools use correlations between enhancer DNA methylation and mRNA target expression to and the more likely targets, these correlations are themselves subject to potential confounders such as cell-type heterogeneity.
+
+## Modelling-based approaches of integrating epigenetic data
+
+
+```{r figs, echo=FALSE, fig.width=7,fig.height=6,fig.cap="Figure 1. (A) Schematic representation of transcription factors binding to their DNA motifs in a genomic region $1$, and in conditions $1$ to $s$. On Y axis is depicted DNA methylation percentage. (B) Schematic representation of the model for condition 1 used in (Piotr J Balwierz et al. 2014; Madsen et al. 2018; Lederer et al. 2020). (C) The model is used to explain the signal levels $E_{gs}$ in terms of bindings sites $N_{gm}$ and unknown motif activities $A_{ms}$, which are inferred by the model. Results might include (D) creating motif activity profiles, (E) correlation of motif activity profiles with gene expression, (F) based on result TFs creating PPI networks using the STRING database (Szklarczyk et al. 2018)."}
+knitr::include_graphics("https://raw.githubusercontent.com/BIMSBbioinfo/motifActivity/master/vignettes/Figures/motifActivity.png?token=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")
+```
+
+In several studies, linear regression-based approach have been applied, in which the sequence
+information is used to model gene expression or chromatin marks, and to learn the TFs that
+play a major role in gene regulation [@mara;@Balwierz2014-mv;@Osmanbeyoglu2014]. The multivariate linear model represents the signal expression of data as a linear combination of motif scores (motif occurrences) and their influential weights ("motif activities") (Figure 1A-C). Due to the large number of genes the weights are generally highly significant and they can be interpreted as a proxy for TFs activities. The error or noise term in the model represents all signal that cannot be explained by the model, i.e. the linear combination of the motif activity scores. More recent approaches use linear regression with L2-regularization (Ridge Regression) [@Madsen2018-ss], Bayesian Ridge Regression [@Balwierz2014-mv] or Bayesian Linear Mixed Models [@Lederer2020]. Bayesian Linear Mixed Models approach relaxes the rigid independence between samples, however on real biological data, it does not perform better than the Bayesian Ridge Regression method due to the fact that large fraction of the gene expression signal ends up in the noise term of the model [@Lederer2020]. 
+
+These linear models can be extended to any signal; in context of DNA methylation since it’s a signal restricted to the $[0, 1]$ range and it requires log2 transformation, such as: $log2((Y + 1)/(100 − Y + 1))$. As a consequence of using DNA methylation as response variable, opposite to the case of gene expression or open chromatin marks, the positive weights in the model, or motif activities, are associated with silencing (Figure 1D). Next steps in the analysis might include altering TFs that are expressed in desirable conditions, and TFs that expression is correlated with changes of motif activities (Figure 1E), providing lists of enriched Gene Ontology categories of TFs, and creating PPI networks of TFs (Figure 1F).
+
+## System-level approaches of integrating epigenetic data
+
+Another set of integrative algorithms are tailored for integrating DNA methylation data that
+are generated in conjunction with other data types from the same samples: for instance, this may
+include sequence information, mutations, copy-number variants, mRNA, microRNAs and
+protein expression. Performing simultaneous inference using all data types together offers more
+powerful and unbiased framework to reveal system-level associations and extract novel biological
+insights. These categories of methods are particularly viable and flexible because any data can
+be ingested as long as they can be represented as a generic matrix of values. As an example, a
+joint NMF algorithm was applied to the matched DNA methylation, mRNA and miRNA
+expression data sets for ovarian cancer from The Cancer Genome Atlas (TCGA), revealing
+novel perturbed pathways [@Zhang2012]. Other matrix factorization methods include
+iCluster [@Shen2009] that performed integrative DNA methylation and mRNA analysis of oestrogen receptor (ER)+ breast cancer, and MOFA [@Argelaguet2018;@Argelaguet2020]. Another powerful method based on deep learning is Janggu [@Kopp2020] and Multi-omics Autoencoder Integration (maui) [@Ronen2019] that gives deep learning’s applicability in deconvoluting non-linear relationships in large datasets using a flexible model architecture. However, these algorithms are usually not tailored for small number of input data points (such as small cohorts of patient data) due to over-fitting, and for that regression-based methods can be more suitable. 
+
+
+# Data
+
+## DNA motif database
+
+In order to calculate number of motif occurrences in our target regulatory regions we need a list of PWM matrices of DNA motifs. Here, we use The JASPAR database [@jaspar] as a source of PWM matrices of known DNA motifs, and that can be loaded by using the __MotifDb__ R package.
+
+```{r,echo=FALSE,warnings=FALSE,message = FALSE}
+library(MotifDb)
+motifs <- as.list(query(query(MotifDb, "hsapiens"),
+             "jaspar_core"))
+print(motifs[1:3])
+```
+ 
+## Target and background regions 
+
+A __GRanges__ object indicating target regulatory regions need to contain a `score` column. In case of target regions that are differentially methylated regions (DMRs), a score can correspond to an average methylation value within DMRs. A __GRanges__ object for background regions is required for the motif enrichment step. Here, background regions are enhancers called from H3K27ac marks from neuroblastoma cell lines [@Boeva2017-i] that don't overlap with DMRs.
+
+```{r}
+# Load differentially methylated regions between high-risk and low-risk patient samples
+# and enhancers from neuroblastoma cell lines
+load("/home/kwreczy/projects/motifActivity/data/motifActivity_DMRs_enhancers_GPL13534pheno_NBbeta_gene.expr.RData")
+
+target.regions=dmrs.dmrcate$MNA
+enh=enhancers$enhancer.nb.cl.mycnamp 
+bg.regions = enh[-queryHits(findOverlaps(enh,
+                                          dmrs.dmrcate$MNA))]
+
+print(target.regions)
+print(bg.regions)
+```
+ 
+ 
+## Genome annotation
+
+A `BSgenome` object of genome annotation needs to be provided for finding matching DNA motifs within target and background sequences. 
+
+```{r,echo=FALSE,warnings=FALSE,message = FALSE}
+# Get a human genome annotation 
+library(BSgenome.Hsapiens.UCSC.hg19)
+genome=Hsapiens
+print(genome)
+```
+
+ 
+# Example workflow for methylation array data
+
+
+## Get scores within target regions
+
+```{r, message=FALSE,warning=FALSE}
+
+# get the 450k annotation data
+library(IlluminaHumanMethylation450kanno.ilmn12.hg19)
+ann450k = getAnnotation(IlluminaHumanMethylation450kanno.ilmn12.hg19)
+ann450k.gr = makeGRangesFromDataFrame(ann450k,
+                                      start.field="pos",
+                                      end.field="pos",
+                                      keep.extra.columns=FALSE)
+
+
+signal.list=mclapply(1:length(target.regions), function(i){
+  tr.cpgids = names(subsetByOverlaps(ann450k.gr, target.regions[i]))
+  colMeans(NB.beta[which(rownames(NB.beta) %in% tr.cpgids),])
+}, mc.cores=20)
+signal.ma=matrix(unlist(signal.list),
+       ncol = ncol(NB.beta),
+       byrow = TRUE)
+colnames(signal.ma) = colnames(NB.beta); rownames(signal.ma) = 1:nrow(signal.ma)
+colnames(signal.ma) <- sapply(colnames(signal.ma), function(x) strsplit(x, "_")[[1]][1])
+print(signal.ma[1:3, 1:3])
+
+# filter
+fil.gene.sign.mtx =
+    filterSignalMatrix(signal.ma,
+                       target.regions,
+                       gene.expr,
+                       corr.method="spearman",
+                       species="hg19",
+                       rule="basalPlusExt",
+                       plot = FALSE,
+                       cores=1)
+target.regions.fil=fil.gene.sign.mtx$signal.granges
+score.mtx.fil=fil.gene.sign.mtx$SignalMatrix
+print(dim(score.mtx.fil))
+print(score.mtx.fil[1:3,1:3])
+
+```
+
+## Occurences of DNA motifs in the regulatory regions
+
+First, we calculate number of occurrences of DNA motifs in given target regions. 
+For that, the `getMotifsHits` function uses __motifcounter__ functionality that provides 
+motif enrichment based on position frequency matrices. The main feature
+of __motifcounter__ includes the utilization of higher-order background models and 
+accounting for self-overlapping motif matches when determining motif enrichment. 
+It can be particularly useful when analyzing differentially methylated regions 
+rich in GC sequences. The background model allows to capture dinucleotide 
+(or higher-order nucleotide, such as here in the example order of 3) 
+composition adequately which may reduced model biases and misleading results 
+compared to using simple GC background models.
+
+```{r, warning=FALSE,warning=FALSE}
+motifhits = getMotifsHits(motifs,
+                          target.regions,
+                          bg.regions,
+                          normalize=TRUE,
+                          singlestranded=FALSE,
+                          cores=5,
+                          genome=genome,
+                          order=3,
+                          alpha=0.005,
+                          gran=0.05)
+print(motifhits[1:3, 1:3])
+
+``` 
+
+## Running a model
+
+In several studies, linear regression-based approach have been applied, in which the sequence information is used to model gene expression or chromatin marks, and to learn the TFs that play a major role in gene regulation [@mara; @Balwierz2014-mv; @Osmanbeyoglu2014; @Madsen2018-ss; @Lederer2020]. In these models the multivariate linear model represents the signal expression of data as a linear combination of motif scores (motif occurrences) and their influential weights ("motif activities") (Figure 1A-C). In our case, we simply used ranked regression.
+
+In our example workflow, motif activity refers to beta coefficients of the model ($A_{ms}$ variable in the Figure 1C); for example, if a beta coefficient is negative it means that for every one unit increase in the prediction variable (number of DNA motifs occurrences) the outcome variable (average % DNA methylation on DMRs) decreases by the coefficient value. Therefore, in case of TFs that bind to unmethylated or lowly methylated regions, we are interested in negative values of motif activity. In addition, motif activity between subgroups of samples might and should be different (in our example, low motif activity values for high-risk groups and high values for low-risk groups).
+
+
+```{r, message=FALSE,warning=FALSE}
+model=getModel(signal.ma,
+               motifhits,
+               cores=1,
+               transform.meth=TRUE)
+print(model$coef[1:3, 1:3])
+```
+
+
+## Creating a transcription factor networks and visualization 
+
+Once we get motif activity scores, we can plot them as histograms across samples for each transcription factor (the `plotMotifActivity` function) or more than one DNA motifs (the `plotMotifsActivity` function).
+
+```{r, message=FALSE,warning=FALSE}
+
+ordered.stages=c("4S",
+                 "1",
+                  "2.1",
+                  "2.2",
+                  "3",
+                  "4")
+pheno.indx =
+        order(ordered(GPL13534pheno$stage,
+             levels = ordered.stages))
+GPL13534pheno.ord=GPL13534pheno[pheno.indx,]
+
+
+coef.ord=
+  model$coef[,match(rownames(GPL13534pheno.ord),
+                    colnames(model$coef))]
+
+color.line=
+  unlist(sapply(1:length(ordered.stages), function(i){
+    nbr.times=sum(GPL13534pheno.ord$stage==ordered.stages[i])
+    colorline1=rainbow(length(ordered.stages))[i]
+    rep(colorline1, nbr.times)
+  }))
+
+
+
+plotMotifActivity("Hsapiens-JASPAR_CORE-TFAP2A-MA0003.1",
+                   coef.ord,
+                   colour.line=color.line
+                  )
+
+
+plotMotifsActivity(rownames(coef.ord)[1:3],
+                   coef.ord,
+                   colour.line=color.line
+                  )
+```
+
+
+In our model TFs can act as activators or repressors. If motif activity of a TF is correlated with expression of a gene that codes this TFs across samples then the TF is predicted to act as a activator. It means if gene expression decreases across samples together with motif activity (related to decrease of DNA methylation) then most likely that TF "activates" DNA motifs on the DMRs. If the correlation is negative then the TFs is predicted to act as a repressor. 
+We filter TFs that gene expression is correlated with motif activities values using the `filterActivityByTFexpression` function.
+
+
+```{r, message=FALSE,warning=FALSE}
+
+coef.ord.renamed=coef.ord
+rownames(coef.ord.renamed) = sapply(rownames(coef.ord), function(x){
+                                    strsplit(x, split="-")[[1]][3]
+                                     })
+
+
+coef.ord.corr=
+filterActivityByTFexpression(coef.ord.renamed,
+                             gene.expr,
+                             split.sign=NULL,
+                             threshold=0.2)
+```
+
+
+In order to build a protein-protein interaction (PPI) network from our result TFs we use the STRING database that stores known and predicted protein–protein interactions. The `plotNetwork` function uses the __STRINGdb__ R package to obtain PPI network and the __igraph__ R package functionalities for visualization of the network.
+
+
+```{r, message=FALSE,warning=FALSE}
+set.seed(123)
+plotNetwork(coef.ord.corr$TF,
+           species=9606, # human
+           version="11",
+           score_threshold=200,
+           input_directory="./"
+           )
+
+# modify colors of nodes and edges in the network
+humangraph=readRDS("~/human_graph_sub.RDS")
+plotNetwork(coef.ord.corr$TF,
+           species=9606, # human
+           version="11",
+           score_threshold=200,
+           input_directory="./",
+           nodes.color = data.frame(gene=coef.ord.corr$TF,
+                                    color=rainbow(13)),
+           layout=layout_with_fr,
+           vertex.size=10,
+           vertex.label.color="black"
+           )
+```
+
+Another way to visualize motif activity values is using a heatmap, such as the Heatmap function from _ComplexHeatmap_ R package. In our example, we used neuroblastoma patient derived data and the most powerful marker of neuroblastoma is MYCN oncogene amplification. Here, we can see that motif activity clusters patients into with MYCN oncogene amplification from the rest of the patients and high-risk group versus lower-risk groups.
+
+```{r}
+
+col=circlize::colorRamp2(c(-1, 0, 1), c("blue", "white", "red"))
+library("ComplexHeatmap")
+Heatmap(as.matrix(coef.ord.corr$coef))
+
+# Add top annotation to show risk groups of neuroblastoma patients
+topann.riskgroup=color.line
+names(topann.riskgroup)=GPL13534pheno.ord$stage
+
+topann.mycn=sapply(GPL13534pheno.ord$mycn_status, 
+                   function(i) if(i=="MYCN-amplified") "#525564" else "#BEB9B5")
+names(topann.mycn) = GPL13534pheno.ord$mycn_status
+
+column_ha = HeatmapAnnotation(riskgroup = names(topann.riskgroup),
+                              MYCNstatus=names(topann.mycn),
+                              col = list(riskgroup = topann.riskgroup,
+                                         MYCNstatus = topann.mycn))
+Heatmap(as.matrix(coef.ord.corr$coef),
+        top_annotation = column_ha
+        )
+
+```
+
+
+# sessionInfo
+```{r}
+sessionInfo()
+```
+
+
+
+
+

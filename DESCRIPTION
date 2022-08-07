@@ -1,0 +1,44 @@
+Package: motifActivity
+Type: Package                                     
+Title: motifActivity: An R package for the computational reconstruction of transcription regulatory networks from high-throughput data
+Version: 0.1.0
+Authors@R: c(person("Katarzyna", "Wreczycka", email = "katwre@gmail.com", role = c("aut", "cre")), person("Altuna", "Akalin", role="aut"))
+Author: Katarzyna Wreczycka [aut, cre],
+        Altuna Akalin [aut]
+Maintainer: Katarzyna Wreczycka <katwre@gmail.com>
+Description: motifActivity aims to reconstruct transcription factor (TF) networks from high-throughput data. Given as input a set of genome-wide gene expression or epigenetic marks (such as from ChIP-seq, BS-seq etc.) across number of samples, and set of DNA motifs, motifActivity predicts key transcription factors (TFs) driving gene expression or an epigenetic mark changes across the samples and the activity profiles of the TFs.
+URL: https://github.com/BIMSBbioinfo/motifActivity/
+BugReports: https://github.com/BIMSBbioinfo/motifActivity/issues
+License: Artistic-2.0
+Encoding: UTF-8
+LazyData: true
+Depends:
+    R (>= 3.6.0)
+Imports:
+    GenomicRanges,
+    IRanges,
+    BSgenome, 
+    Biostrings,
+    rtracklayer,
+    genomation,
+    methylKit,
+    DESeq2,
+    STRINGdb,
+    igraph,
+    ggplot2,
+    reshape2,
+    data.table,
+    gridExtra,
+    rGREAT,
+    motifcounter,
+    STRINGdb,
+    ComplexHeatmap
+Collate:
+    'motifActivity-classes.R'
+    'SignalMatrix.R'
+    'MotifHitsMatrix.R'
+    'Model.R'
+    'Interactions.R'
+    'CorrelateMotifswithGenes.R'
+    'Visualise.R'
+RoxygenNote: 7.1.2
