@@ -14,7 +14,7 @@ The **motifActivity** R package predicts key transcription factors (TFs) driving
 
 ### Install the latest version via install_github
 
-You can install the development version of **deconvR** directly from Github:
+You can install the development version of **motifActivity** directly from Github:
 
 ``` r
 library(devtools)
