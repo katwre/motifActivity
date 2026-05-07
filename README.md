@@ -20,3 +20,17 @@ You can install the development version of **motifActivity** directly from Githu
 library(devtools)
 install_github("BIMSBbioinfo/motifActivity",build_vignettes=FALSE)
 ```
+
+# Documentation
+
+[Read the vignettes online](https://katwre.github.io/motifActivity/vignettes/motifActivityManual.html) - click to view the complete vignette and examples in your browser
+
+Alternatively, view it locally in R after installation:
+
+``` r
+# Install with vignettes built
+devtools::install_github("BIMSBbioinfo/motifActivity", build_vignettes=TRUE)
+
+# View the vignette locally
+vignette("motifActivity")
+```
