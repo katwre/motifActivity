@@ -23,7 +23,7 @@ install_github("BIMSBbioinfo/motifActivity",build_vignettes=FALSE)
 
 # Documentation
 
-[Read the vignettes online](https://katwre.github.io/motifActivity/vignettes/motifActivityManual.html) - click to view the complete vignette and examples in your browser
+📖 **[Read the Full Manual Online](https://htmlpreview.github.io/?https://github.com/katwre/motifActivity/blob/main/vignettes/motifActivityManual.html)** - Click to view the complete vignette with all figures and examples in your browser!
 
 Alternatively, view it locally in R after installation:
 
